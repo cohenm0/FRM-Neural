@@ -1,4 +1,4 @@
-package main.java.frm;
+package frm;
 
 public class ElmanFRM {
     //public void normalizeSunspots(

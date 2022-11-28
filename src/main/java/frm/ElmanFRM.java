@@ -9,12 +9,10 @@ import org.encog.neural.networks.BasicNetwork;
 import org.encog.neural.networks.training.Train;
 import org.encog.neural.networks.training.propagation.resilient.ResilientPropagation;
 import org.encog.neural.pattern.ElmanPattern;
-import org.encog.util.EngineArray;
 import org.encog.util.arrayutil.NormalizeArray;
 import org.encog.util.csv.ReadCSV;
 import java.io.File;
 import java.text.NumberFormat;
-import java.util.Arrays;
 
 public class ElmanFRM {
 
@@ -24,17 +22,17 @@ public class ElmanFRM {
 
     public final static double[] RATES = getRates(rawFile);
 
-    public final static int STARTING_YEAR = 1991;
+    public final static int[] DATES = getDates(rawFile);
 
     public final static int TRAIN_START = 0;
 
     public final static int TRAIN_END = 2299;
 
-    public final static int EVALUATE_START = 2300;
+    public final static int TESTING_START = 2300;
 
     public final static int EVALUATE_END = RATES.length-1;
 
-    public final static double MAX_ERROR = 0.01;
+    public final static double MAX_ERROR = 0.001;
 
     public final static double LOW = 0.1;
 
@@ -42,24 +40,37 @@ public class ElmanFRM {
 
     private double[] normalizedRates;
 
-    private double[] closedLoopRates;
-
     public static double[] getRates(File rawFile) {
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
+        //2693
         double[] rates = new double[2693];
+        int i = 0;
+        while (csv.next()) {
+            double interestRate = csv.getDouble(1);
+            rates[i] = interestRate;
+
+            i++;
+        }
+        csv.close();
+        return rates;
+    }
+
+    public static int[] getDates(File rawFile) {
+        ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
+        //2693
+        int[] dates = new int[2693];
         int i = 0;
         while (csv.next()) {
             // Date format is yyyy-mm-dd, we'll pare it into yyyymmdd to be used as a sequence integer
             String dateString = csv.get(0);
             String modifiedDate = dateString.replace("-", "");
             int sequenceNumber = Integer.parseInt(modifiedDate);
+            dates[i] = sequenceNumber;
 
-            double interestRate = csv.getDouble(1);
-            rates[i] = interestRate;
             i++;
         }
         csv.close();
-        return rates;
+        return dates;
     }
 
     public void normalizeRates(double low, double high) {
@@ -68,17 +79,16 @@ public class ElmanFRM {
         normalize.setNormalizedLow(low);
 
         normalizedRates = normalize.process(RATES);
-        closedLoopRates = EngineArray.arrayCopy(normalizedRates);
     }
 
     public MLDataSet generateTraining() {
         MLDataSet result = new BasicMLDataSet();
 
-        for (int year = TRAIN_START; year < TRAIN_END; year++) {
+        for (int idx = TRAIN_START; idx < TRAIN_END; idx++) {
             MLData inputData = new BasicMLData(1);
             MLData idealData = new BasicMLData(1);
-            inputData.setData(0, this.normalizedRates[year]);
-            idealData.setData(0, this.normalizedRates[year]);
+            inputData.setData(0, this.normalizedRates[idx]);
+            idealData.setData(0, this.normalizedRates[idx + 1]);
             result.add(inputData, idealData);
         }
         return result;
@@ -92,18 +102,18 @@ public class ElmanFRM {
         pattern.setActivationFunction(new ActivationSigmoid());
         return (BasicNetwork)pattern.generate();
     }
-    void train(BasicNetwork network,MLDataSet training) {
+    void train(BasicNetwork network, MLDataSet training) {
         final Train train = new ResilientPropagation(network, training);
 
         int epoch = 1;
 
         do {
             train.iteration();
-            System.out.println("Epoch #" + epoch + "Error" + train.getError());
+            System.out.println("Epoch #: " + epoch + "Error: " + train.getError());
             epoch++;
         } while(train.getError() > MAX_ERROR);
 
-        System.out.println(network.calculateError(training));
+        System.out.println("Final Error: " + network.calculateError(training));
 
     }
     public void predict(BasicNetwork network) {
@@ -111,7 +121,7 @@ public class ElmanFRM {
         format.setMaximumFractionDigits(4);
         format.setMinimumFractionDigits(4);
 
-        System.out.println("Year\tActual\tPredict\tClosed Loop Predict");
+        System.out.println("Year\tActual\tPredict");
 
         BasicNetwork regular = (BasicNetwork)network.clone();
         BasicNetwork closedLoop = (BasicNetwork)network.clone();
@@ -119,31 +129,25 @@ public class ElmanFRM {
         regular.clearContext();
         closedLoop.clearContext();
 
-        for (int year = 1; year < this.normalizedRates.length; year++) {
+        for (int idx = 1; idx < this.normalizedRates.length; idx++) {
             //Calculate based on actual data
             MLData input = new BasicMLData(1);
-            input.setData(0, this.normalizedRates[year - 1]);
+            input.setData(0, this.normalizedRates[idx - 1]);
 
             MLData output = regular.compute(input);
             double prediction = output.getData(0);
-            this.closedLoopRates[year] = prediction;
-
-            //Calculate the closed loop based on predicted data
-            input.setData(0, this.closedLoopRates[year - 1]);
-            output = closedLoop.compute(input);
-            double closedLoopPrediction = output.getData(0);
 
             String t;
 
-            if (year < EVALUATE_START) {
-                t = "Train:";
+            if (idx < TESTING_START) {
+                t = "Training: ";
             }
             else {
-                t = "Evaluate:";
+                t = "Testing: ";
             }
 
             //Display
-            System.out.println(t + (STARTING_YEAR + year) + "\t" + format.format(this.normalizedRates[year]) + "\t" + format.format(prediction) + "\t" + format.format(closedLoopPrediction));
+            System.out.println(t + this.DATES[idx] + "\t" + format.format(this.normalizedRates[idx]) + "\t" + format.format(prediction));
         }
     }
     public void run() {

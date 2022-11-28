@@ -12,7 +12,6 @@ import org.encog.neural.pattern.ElmanPattern;
 import org.encog.util.EngineArray;
 import org.encog.util.arrayutil.NormalizeArray;
 import org.encog.util.csv.ReadCSV;
-
 import java.io.File;
 import java.text.NumberFormat;
 import java.util.Arrays;

@@ -9,10 +9,10 @@ import org.encog.neural.networks.BasicNetwork;
 import org.encog.neural.networks.training.Train;
 import org.encog.neural.networks.training.propagation.resilient.ResilientPropagation;
 import org.encog.neural.pattern.ElmanPattern;
-import org.encog.util.arrayutil.NormalizeArray;
+import org.encog.util.arrayutil.NormalizationAction;
+import org.encog.util.arrayutil.NormalizedField;
 import org.encog.util.csv.ReadCSV;
 import java.io.File;
-import java.text.NumberFormat;
 
 public class ElmanFRM {
 
@@ -38,11 +38,15 @@ public class ElmanFRM {
 
     public final static double HIGH = 0.9;
 
-    private double[] normalizedRates;
+    /**
+     * Normalize the mortgage rate values.
+     */
+    public static NormalizedField normRate = new NormalizedField(
+            NormalizationAction.Normalize, "rate", 18.63, 2.65, HIGH, LOW);
 
     public static double[] getRates(File rawFile) {
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
-        //2693
+
         double[] rates = new double[2693];
         int i = 0;
         while (csv.next()) {
@@ -73,22 +77,14 @@ public class ElmanFRM {
         return dates;
     }
 
-    public void normalizeRates(double low, double high) {
-        NormalizeArray normalize = new NormalizeArray();
-        normalize.setNormalizedHigh(high);
-        normalize.setNormalizedLow(low);
-
-        normalizedRates = normalize.process(RATES);
-    }
-
     public MLDataSet generateTraining() {
         MLDataSet result = new BasicMLDataSet();
 
         for (int idx = TRAIN_START; idx < TRAIN_END; idx++) {
             MLData inputData = new BasicMLData(1);
             MLData idealData = new BasicMLData(1);
-            inputData.setData(0, this.normalizedRates[idx]);
-            idealData.setData(0, this.normalizedRates[idx + 1]);
+            inputData.setData(0, normRate.normalize(RATES[idx]));
+            idealData.setData(0, normRate.normalize(RATES[idx + 1]));
             result.add(inputData, idealData);
         }
         return result;
@@ -102,6 +98,7 @@ public class ElmanFRM {
         pattern.setActivationFunction(new ActivationSigmoid());
         return (BasicNetwork)pattern.generate();
     }
+
     void train(BasicNetwork network, MLDataSet training) {
         final Train train = new ResilientPropagation(network, training);
 
@@ -116,12 +113,9 @@ public class ElmanFRM {
         System.out.println("Final Error: " + network.calculateError(training));
 
     }
-    public void predict(BasicNetwork network) {
-        NumberFormat format = NumberFormat.getNumberInstance();
-        format.setMaximumFractionDigits(4);
-        format.setMinimumFractionDigits(4);
 
-        System.out.println("Year\tActual\tPredict");
+    public void predict(BasicNetwork network) {
+        System.out.printf("%11s, %9s, %8s, %8s\n", "train/test", "Year", "Actual", "Predict");
 
         BasicNetwork regular = (BasicNetwork)network.clone();
         BasicNetwork closedLoop = (BasicNetwork)network.clone();
@@ -129,34 +123,35 @@ public class ElmanFRM {
         regular.clearContext();
         closedLoop.clearContext();
 
-        for (int idx = 1; idx < this.normalizedRates.length; idx++) {
+        for (int idx = 1; idx < RATES.length; idx++) {
             //Calculate based on actual data
             MLData input = new BasicMLData(1);
-            input.setData(0, this.normalizedRates[idx - 1]);
+            input.setData(0, normRate.normalize(RATES[idx - 1]));
 
             MLData output = regular.compute(input);
-            double prediction = output.getData(0);
+            double prediction = normRate.deNormalize(output.getData(0));
 
             String t;
 
             if (idx < TESTING_START) {
-                t = "Training: ";
+                t = "Training";
             }
             else {
-                t = "Testing: ";
+                t = "Testing";
             }
 
             //Display
-            System.out.println(t + this.DATES[idx] + "\t" + format.format(this.normalizedRates[idx]) + "\t" + format.format(prediction));
+            System.out.printf("%11s, %9d, %8.2f, %8.2f\n", t, DATES[idx], RATES[idx], prediction);
         }
     }
+
     public void run() {
-        normalizeRates(LOW, HIGH);
         BasicNetwork network = createNetwork();
         MLDataSet training = generateTraining();
         train(network, training);
         predict(network);
     }
+
     public static void main(String args[]) {
         ElmanFRM frm = new ElmanFRM();
         frm.run();

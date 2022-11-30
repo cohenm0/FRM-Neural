@@ -32,6 +32,7 @@ public class TimeDomainFRM {
      * This is the amount of data to use to guide the prediction.
      */
     public static final int INPUT_WINDOW_SIZE = 12;
+    //public static final int INPUT_WINDOW_SIZE = 1;
 
     /**
      * This is the amount of data to actually predict.
@@ -142,7 +143,7 @@ public class TimeDomainFRM {
                 MLData modelInput = trainingData.generateInputNeuralData(1);
                 MLData modelOutput = model.compute(modelInput);
                 double predictedRate = normRate.deNormalize(modelOutput.getData(0));
-                System.out.println(sequenceNumber + ":Predicted=" + predictedRate + ",Actual=" + interestRate);
+                System.out.println("Date: " + sequenceNumber + " Predicted= " + predictedRate + " Actual= " + interestRate);
 
                 // Remove the earliest training element.  Unlike when we produced training data,
                 // we do not want to build up a large data set.  We just add enough data points to produce

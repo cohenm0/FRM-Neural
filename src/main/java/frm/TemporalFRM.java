@@ -21,6 +21,16 @@ import org.encog.util.simple.EncogUtility;
 
 import java.io.File;
 
+/**
+ * This project attempts to predict mortgage rates using a Temporal Neural Network for the purpose of
+ * exploring the methods and challenges of predicting time-series data.
+ *
+ * This project makes use of Encog ML libraries and was inspired by the Sun Spot prediction example in
+ * the JavaNeural project: https://github.com/roncoleman125/JavaNeural
+ *
+ * @author Mark Cohen and Jonah Caro
+ * @date 7 Dec 2022
+ */
 public class TemporalFRM {
     /**
      * Set this to whatever you want to use as your home directory.
@@ -29,7 +39,6 @@ public class TemporalFRM {
     public static final File MYDIR = new File("data/");
 
     // This is the amount of data to use to guide the prediction.
-    //public static final int INPUT_WINDOW_SIZE = 60;
     public static final int INPUT_WINDOW_SIZE = 1;
 
     // This is the amount of data to actually predict.
@@ -37,9 +46,6 @@ public class TemporalFRM {
 
     // End training at this point in the data set
     public final static int TRAIN_END = 2299;
-
-    // Use this value to decide where we would like to begin predicting rates
-    public final static int TESTING_START = 2300;
 
     // Normalize the mortgage rate values to 0-1.
     public static NormalizedField normRate = new NormalizedField(
@@ -137,13 +143,11 @@ public class TemporalFRM {
      * Predict mortgage rates using the input data set and a trained temporal model
      * @param rawFile Csv data containing 30 year fixed rate mortgage rates
      * @param model Trained temporal ML model
-     * @return
      */
     public static void predict(File rawFile, MLRegression model) {
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
 
-        //System.out.printf("%9s, %8s, %8s\n", "Year", "Actual", "Predict");
         System.out.printf("%11s, %9s, %8s, %8s, %8s\n", "train/test", "Year", "Actual", "Predict", "Error");
 
         int csv_idx = 0;
@@ -171,8 +175,6 @@ public class TemporalFRM {
                 MLData modelInput = trainingData.generateInputNeuralData(1);
                 MLData modelOutput = model.compute(modelInput);
                 predictedRate = normRate.deNormalize(modelOutput.getData(0));
-                //System.out.println("Date: " + sequenceNumber + " Predicted= " + predictedRate + " Actual= " + interestRate);
-                //System.out.printf("%9d, %8.2f, %8.2f\n", sequenceNumber, interestRate, predictedRate);
 
                 // Remove the earliest training element.  Unlike when we produced training data,
                 // we do not want to build up a large data set.  We just add enough data points to produce
@@ -182,6 +184,7 @@ public class TemporalFRM {
 
             double error = 0.5 * (predictedRate - interestRate) * (predictedRate - interestRate);
 
+            // We print results even before prediction to make it easier to line up csv output for analysis
             System.out.printf("%11s, %9d, %8.2f, %8.2f, %8.3f\n", t, sequenceNumber, interestRate, predictedRate, error);
 
             // Add the next point to the temporal data set

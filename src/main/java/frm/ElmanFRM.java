@@ -1,6 +1,5 @@
 package frm;
 
-import org.encog.bot.browse.range.Input;
 import org.encog.engine.network.activation.ActivationSigmoid;
 import org.encog.ml.data.MLData;
 import org.encog.ml.data.MLDataSet;
@@ -15,6 +14,16 @@ import org.encog.util.arrayutil.NormalizedField;
 import org.encog.util.csv.ReadCSV;
 import java.io.File;
 
+/**
+ * This project attempts to predict mortgage rates using an Elman Recurrent Neural Network for the purpose of
+ * exploring the methods and challenges of predicting time-series data.
+ *
+ * This project makes use of Encog ML libraries and was inspired by the Sun Spot prediction example in
+ * the JavaNeural project: https://github.com/roncoleman125/JavaNeural
+ *
+ * @author Mark Cohen and Jonah Caro
+ * @date 7 Dec 2022
+ */
 public class ElmanFRM {
 
     public static final File MYDIR = new File("data/");

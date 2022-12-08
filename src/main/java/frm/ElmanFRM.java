@@ -50,6 +50,11 @@ public class ElmanFRM {
     public static NormalizedField normRate = new NormalizedField(
             NormalizationAction.Normalize, "rate", 18.63, 2.65, HIGH, LOW);
 
+    /**
+     * Takes raw CSV file and returns mortgage rates
+     * @param rawFile the raw input file object
+     * @return Mortgage rate data
+     */
     public static double[] getRates(File rawFile) {
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
 
@@ -65,9 +70,13 @@ public class ElmanFRM {
         return rates;
     }
 
+    /**
+     * Takes raw csv file and returns dates associated with each rate sample
+     * @param rawFile the raw input file object
+     * @return Dates associated with each mortgage rate
+     */
     public static int[] getDates(File rawFile) {
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
-        //2693
         int[] dates = new int[2693];
         int i = 0;
         while (csv.next()) {
@@ -83,6 +92,10 @@ public class ElmanFRM {
         return dates;
     }
 
+    /**
+     * Generates an MLDataSet to train the network
+     * @return MLDataSet
+     */
     public MLDataSet generateTraining() {
         MLDataSet result = new BasicMLDataSet();
 
@@ -98,8 +111,6 @@ public class ElmanFRM {
                 inputData.setData(j, normRate.normalize(RATES[idx - INPUT_WINDOW_SIZE + j]));
             }
 
-            //inputData.setData(window_idx, normRate.normalize(RATES[idx]));
-            //idealData.setData(0, normRate.normalize(RATES[idx + 1]));
             idealData.setData(0, normRate.normalize(RATES[idx]));
 
             result.add(inputData, idealData);
@@ -107,6 +118,10 @@ public class ElmanFRM {
         return result;
     }
 
+    /**
+     * Create a BasicNetwork using ElmanPattern and the Activation Sigmoid function
+     * @return
+     */
     public BasicNetwork createNetwork() {
         ElmanPattern pattern = new ElmanPattern();
         pattern.setInputNeurons(INPUT_WINDOW_SIZE);
@@ -116,6 +131,11 @@ public class ElmanFRM {
         return (BasicNetwork)pattern.generate();
     }
 
+    /**
+     * Trains the BasicNetwork using the training MLDataSet, prints the epoch # and the training error
+     * @param network BasicNetwork that is being trained
+     * @param training MLDataSet
+     */
     void train(BasicNetwork network, MLDataSet training) {
         final Train train = new ResilientPropagation(network, training);
 
@@ -131,6 +151,10 @@ public class ElmanFRM {
 
     }
 
+    /**
+     *
+     * @param network BasicNetwork being predicted
+     */
     public void predict(BasicNetwork network) {
         double prediction = 0;
         System.out.printf("%11s, %9s, %8s, %8s, %8s\n", "train/test", "Year", "Actual", "Predict", "Error");
@@ -150,7 +174,6 @@ public class ElmanFRM {
                 for (int j = 0; j < INPUT_WINDOW_SIZE; j++) {
                     input.setData(j, normRate.normalize(RATES[idx - INPUT_WINDOW_SIZE + j]));
                 }
-                //input.setData(0, normRate.normalize(RATES[idx - 1]));
 
                 MLData output = regular.compute(input);
                 prediction = normRate.deNormalize(output.getData(0));

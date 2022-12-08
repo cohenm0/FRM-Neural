@@ -1,5 +1,6 @@
 package frm;
 
+import org.encog.bot.browse.range.Input;
 import org.encog.engine.network.activation.ActivationSigmoid;
 import org.encog.ml.data.MLData;
 import org.encog.ml.data.MLDataSet;
@@ -37,6 +38,11 @@ public class ElmanFRM {
     public final static double LOW = 0.1;
 
     public final static double HIGH = 0.9;
+
+    // This is the amount of data to use to guide the prediction.
+    public static final int INPUT_WINDOW_SIZE = 60;
+
+    public static final int HIDDEN_LAYER_NEURONS = 10;
 
     /**
      * Normalize the mortgage rate values.
@@ -81,10 +87,21 @@ public class ElmanFRM {
         MLDataSet result = new BasicMLDataSet();
 
         for (int idx = TRAIN_START; idx < TRAIN_END; idx++) {
-            MLData inputData = new BasicMLData(1);
+            if (idx < INPUT_WINDOW_SIZE) {
+                continue;
+            }
+            MLData inputData = new BasicMLData(INPUT_WINDOW_SIZE);
             MLData idealData = new BasicMLData(1);
-            inputData.setData(0, normRate.normalize(RATES[idx]));
-            idealData.setData(0, normRate.normalize(RATES[idx + 1]));
+
+            // Look backward in training data to build up the input sliding window
+            for (int j = 0; j < INPUT_WINDOW_SIZE; j++) {
+                inputData.setData(j, normRate.normalize(RATES[idx - INPUT_WINDOW_SIZE + j]));
+            }
+
+            //inputData.setData(window_idx, normRate.normalize(RATES[idx]));
+            //idealData.setData(0, normRate.normalize(RATES[idx + 1]));
+            idealData.setData(0, normRate.normalize(RATES[idx]));
+
             result.add(inputData, idealData);
         }
         return result;
@@ -92,8 +109,8 @@ public class ElmanFRM {
 
     public BasicNetwork createNetwork() {
         ElmanPattern pattern = new ElmanPattern();
-        pattern.setInputNeurons(1);
-        pattern.addHiddenLayer(10);
+        pattern.setInputNeurons(INPUT_WINDOW_SIZE);
+        pattern.addHiddenLayer(HIDDEN_LAYER_NEURONS);
         pattern.setOutputNeurons(1);
         pattern.setActivationFunction(new ActivationSigmoid());
         return (BasicNetwork)pattern.generate();
@@ -115,7 +132,8 @@ public class ElmanFRM {
     }
 
     public void predict(BasicNetwork network) {
-        System.out.printf("%11s, %9s, %8s, %8s\n", "train/test", "Year", "Actual", "Predict");
+        double prediction = 0;
+        System.out.printf("%11s, %9s, %8s, %8s, %8s\n", "train/test", "Year", "Actual", "Predict", "Error");
 
         BasicNetwork regular = (BasicNetwork)network.clone();
         BasicNetwork closedLoop = (BasicNetwork)network.clone();
@@ -123,13 +141,20 @@ public class ElmanFRM {
         regular.clearContext();
         closedLoop.clearContext();
 
-        for (int idx = 1; idx < RATES.length; idx++) {
-            //Calculate based on actual data
-            MLData input = new BasicMLData(1);
-            input.setData(0, normRate.normalize(RATES[idx - 1]));
+        for (int idx = 0; idx < RATES.length; idx++) {
+            // We chose to start the for loop at idx = 0 rather than idx = INPUT_WINDOW_SIZE because it makes
+            // the results lines up better for comparison with different window sizes
+            if (idx >= INPUT_WINDOW_SIZE) {
+                //Calculate based on actual data
+                MLData input = new BasicMLData(INPUT_WINDOW_SIZE);
+                for (int j = 0; j < INPUT_WINDOW_SIZE; j++) {
+                    input.setData(j, normRate.normalize(RATES[idx - INPUT_WINDOW_SIZE + j]));
+                }
+                //input.setData(0, normRate.normalize(RATES[idx - 1]));
 
-            MLData output = regular.compute(input);
-            double prediction = normRate.deNormalize(output.getData(0));
+                MLData output = regular.compute(input);
+                prediction = normRate.deNormalize(output.getData(0));
+            }
 
             String t;
 
@@ -140,8 +165,10 @@ public class ElmanFRM {
                 t = "Testing";
             }
 
+            double error = 0.5 * (prediction - RATES[idx]) * (prediction - RATES[idx]);
+
             //Display
-            System.out.printf("%11s, %9d, %8.2f, %8.2f\n", t, DATES[idx], RATES[idx], prediction);
+            System.out.printf("%11s, %9d, %8.2f, %8.2f, %8.3f\n", t, DATES[idx], RATES[idx], prediction, error);
         }
     }
 

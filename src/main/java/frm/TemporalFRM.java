@@ -21,30 +21,34 @@ import org.encog.util.simple.EncogUtility;
 
 import java.io.File;
 
-public class TimeDomainFRM {
+public class TemporalFRM {
     /**
      * Set this to whatever you want to use as your home directory.
      * The example is set to use the current directory.
      */
     public static final File MYDIR = new File("data/");
 
-    /**
-     * This is the amount of data to use to guide the prediction.
-     */
-    public static final int INPUT_WINDOW_SIZE = 12;
-    //public static final int INPUT_WINDOW_SIZE = 1;
+    // This is the amount of data to use to guide the prediction.
+    //public static final int INPUT_WINDOW_SIZE = 60;
+    public static final int INPUT_WINDOW_SIZE = 1;
 
-    /**
-     * This is the amount of data to actually predict.
-     */
+    // This is the amount of data to actually predict.
     public static final int PREDICT_WINDOW_SIZE = 1;
 
-    /**
-     * Normalize the mortgage rate values to 0-1.
-     */
+    // End training at this point in the data set
+    public final static int TRAIN_END = 2299;
+
+    // Use this value to decide where we would like to begin predicting rates
+    public final static int TESTING_START = 2300;
+
+    // Normalize the mortgage rate values to 0-1.
     public static NormalizedField normRate = new NormalizedField(
             NormalizationAction.Normalize, "rate", 18.63, 2.65, 1, 0);
 
+    /**
+     * Initialize a temporal ML data set
+     * @return the initialized data set
+     */
     public static TemporalMLDataSet initDataSet() {
         // create a temporal data set
         TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
@@ -64,7 +68,9 @@ public class TimeDomainFRM {
     public static TemporalMLDataSet createTraining(File rawFile) {
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
-        while (csv.next()) {
+
+        int csv_idx = 0;
+        while (csv.next() && (csv_idx <= TRAIN_END)) {
             // Date format is yyyy-mm-dd, we'll pare it into yyyymmdd to be used as a sequence integer
             String dateString = csv.get(0);
             String modifiedDate = dateString.replace("-", "");
@@ -77,6 +83,8 @@ public class TimeDomainFRM {
             point.setSequence(sequenceNumber);
             point.setData(0, normRate.normalize(interestRate));
             trainingData.getPoints().add(point);
+
+            csv_idx++;
         }
         csv.close();
 
@@ -88,11 +96,11 @@ public class TimeDomainFRM {
     /**
      * Create and train a model using Encog factory codes to specify the model type.
      * @param trainingData The temporal training data set
-     * @param methodName
-     * @param methodArchitecture
-     * @param trainerName
-     * @param trainerArgs
-     * @return
+     * @param methodName The machine learning method
+     * @param methodArchitecture the machine learning architecture to use with the method
+     * @param trainerName The type of training to be used
+     * @param trainerArgs Arguments for the trainer
+     * @return a trained ML model
      */
     public static MLRegression trainModel(
             MLDataSet trainingData,
@@ -120,14 +128,25 @@ public class TimeDomainFRM {
         }
 
         // third train the model
-        EncogUtility.trainToError(train, 0.002);
+        EncogUtility.trainToError(train, 0.001);
 
         return (MLRegression)train.getMethod();
     }
 
-    public static TemporalMLDataSet predict(File rawFile, MLRegression model) {
+    /**
+     * Predict mortgage rates using the input data set and a trained temporal model
+     * @param rawFile Csv data containing 30 year fixed rate mortgage rates
+     * @param model Trained temporal ML model
+     * @return
+     */
+    public static void predict(File rawFile, MLRegression model) {
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ',');
+
+        //System.out.printf("%9s, %8s, %8s\n", "Year", "Actual", "Predict");
+        System.out.printf("%11s, %9s, %8s, %8s, %8s\n", "train/test", "Year", "Actual", "Predict", "Error");
+
+        int csv_idx = 0;
         while (csv.next()) {
             // Date format is yyyy-mm-dd, we'll pare it into yyyymmdd to be used as a sequence integer
             String dateString = csv.get(0);
@@ -135,6 +154,15 @@ public class TimeDomainFRM {
             int sequenceNumber = Integer.parseInt(modifiedDate);
 
             double interestRate = csv.getDouble(1);
+            double predictedRate = 0;
+
+            String t;
+            if (csv_idx <= TRAIN_END) {
+                t = "Training";
+            }
+            else {
+                t = "Testing";
+            }
 
             // do we have enough data for a prediction yet?
             if (trainingData.getPoints().size() >= trainingData.getInputWindowSize()) {
@@ -142,8 +170,9 @@ public class TimeDomainFRM {
                 // of the time slice its encoding.  So for RAW data we are really encoding 0.
                 MLData modelInput = trainingData.generateInputNeuralData(1);
                 MLData modelOutput = model.compute(modelInput);
-                double predictedRate = normRate.deNormalize(modelOutput.getData(0));
-                System.out.println("Date: " + sequenceNumber + " Predicted= " + predictedRate + " Actual= " + interestRate);
+                predictedRate = normRate.deNormalize(modelOutput.getData(0));
+                //System.out.println("Date: " + sequenceNumber + " Predicted= " + predictedRate + " Actual= " + interestRate);
+                //System.out.printf("%9d, %8.2f, %8.2f\n", sequenceNumber, interestRate, predictedRate);
 
                 // Remove the earliest training element.  Unlike when we produced training data,
                 // we do not want to build up a large data set.  We just add enough data points to produce
@@ -151,17 +180,21 @@ public class TimeDomainFRM {
                 trainingData.getPoints().remove(0);
             }
 
+            double error = 0.5 * (predictedRate - interestRate) * (predictedRate - interestRate);
+
+            System.out.printf("%11s, %9d, %8.2f, %8.2f, %8.3f\n", t, sequenceNumber, interestRate, predictedRate, error);
+
             // Add the next point to the temporal data set
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
             point.setSequence(sequenceNumber);
             point.setData(0, normRate.normalize(interestRate));
             trainingData.getPoints().add(point);
+            csv_idx++;
         }
         csv.close();
 
         // generate the time-boxed data
         trainingData.generate();
-        return trainingData;
     }
 
     /**

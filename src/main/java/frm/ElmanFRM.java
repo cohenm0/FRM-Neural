@@ -49,7 +49,7 @@ public class ElmanFRM {
     public final static double HIGH = 0.9;
 
     // This is the amount of data to use to guide the prediction.
-    public static final int INPUT_WINDOW_SIZE = 60;
+    public static final int INPUT_WINDOW_SIZE = 1;
 
     public static final int HIDDEN_LAYER_NEURONS = 10;
 
@@ -129,7 +129,7 @@ public class ElmanFRM {
 
     /**
      * Create a BasicNetwork using ElmanPattern and the Activation Sigmoid function
-     * @return
+     * @return BasicNetwork
      */
     public BasicNetwork createNetwork() {
         ElmanPattern pattern = new ElmanPattern();
@@ -161,7 +161,7 @@ public class ElmanFRM {
     }
 
     /**
-     *
+     * Predicts the mortgage rate using a BasicNetwork, prints ideal, prediction and error
      * @param network BasicNetwork being predicted
      */
     public void predict(BasicNetwork network) {
@@ -204,6 +204,9 @@ public class ElmanFRM {
         }
     }
 
+    /**
+     * Function to run the program.
+     */
     public void run() {
         BasicNetwork network = createNetwork();
         MLDataSet training = generateTraining();
@@ -211,6 +214,10 @@ public class ElmanFRM {
         predict(network);
     }
 
+    /**
+     * The main method.
+     * @param args The arguments.
+     */
     public static void main(String args[]) {
         ElmanFRM frm = new ElmanFRM();
         frm.run();

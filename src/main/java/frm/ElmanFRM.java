@@ -162,7 +162,7 @@ public class ElmanFRM {
 
     /**
      * Predicts the mortgage rate using a BasicNetwork, prints ideal, prediction and error
-     * @param network BasicNetwork being predicted
+     * @param network BasicNetwork used to predict.
      */
     public void predict(BasicNetwork network) {
         double prediction = 0;
